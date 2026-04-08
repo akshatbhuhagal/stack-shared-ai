@@ -1,0 +1,21 @@
+{
+  "name": "bun-fixture",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "bun run --hot src/index.ts",
+    "start": "bun src/index.ts",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "elysia": "^1.0.0",
+    "drizzle-orm": "^0.30.0",
+    "zod": "^3.22.0",
+    "jose": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.4.0",
+    "drizzle-kit": "^0.20.0"
+  }
+}

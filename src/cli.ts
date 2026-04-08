@@ -4,6 +4,9 @@ import { loadConfigFile, mergeConfig, Config } from "./config";
 import { run, registerScanner, registerCrossStackScanner } from "./runner";
 import { FlutterScanner } from "./scanners/flutter/index";
 import { ExpressScanner } from "./scanners/express/index";
+import { NextjsScanner } from "./scanners/nextjs/index";
+import { BunScanner } from "./scanners/bun/index";
+import { TypeScriptScanner } from "./scanners/typescript/index";
 import { overviewScanner } from "./scanners/cross-stack/overview";
 import { apiContractScanner } from "./scanners/cross-stack/api-contract";
 import { instructionsScanner } from "./scanners/cross-stack/instructions";
@@ -12,6 +15,9 @@ import { loadPlugins } from "./plugin-loader";
 // Register built-in framework scanners
 registerScanner("flutter", async () => new FlutterScanner());
 registerScanner("express", async () => new ExpressScanner());
+registerScanner("nextjs", async () => new NextjsScanner());
+registerScanner("bun", async () => new BunScanner());
+registerScanner("typescript", async () => new TypeScriptScanner());
 
 // Register cross-stack scanners (run after framework scanners)
 registerCrossStackScanner(apiContractScanner);

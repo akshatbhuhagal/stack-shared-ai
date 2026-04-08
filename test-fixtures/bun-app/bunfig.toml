@@ -1,0 +1,12 @@
+# Bun configuration
+
+[install]
+registry = "https://registry.npmjs.org"
+exact = true
+
+[install.cache]
+disable = false
+
+[test]
+preload = ["./test/setup.ts"]
+coverage = true
