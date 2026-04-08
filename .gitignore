@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.stack-shared-ai/
+*.log
+.env
+.DS_Store
+
+plan.md
+PROJECT_CONTEXT.md

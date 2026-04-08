@@ -1,0 +1,27 @@
+{
+  "name": "stack-shared-ai",
+  "version": "0.1.0",
+  "description": "CLI tool that scans your codebase and generates compact, structured index files for AI assistants",
+  "main": "dist/cli.js",
+  "bin": {
+    "stack-shared-ai": "./bin/stack-shared-ai.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/cli.js"
+  },
+  "keywords": ["ai", "codex", "codebase", "scanner", "flutter", "express", "cli"],
+  "author": "",
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "ts-morph": "^27.0.2",
+    "yaml": "^2.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2"
+  }
+}

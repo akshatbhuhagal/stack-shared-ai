@@ -1,0 +1,13 @@
+name: flutter_autoroute_app
+description: Test AutoRoute-based Flutter app
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+dependencies:
+  flutter:
+    sdk: flutter
+  auto_route: ^7.8.0
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.0
+  auto_route_generator: ^7.3.0
