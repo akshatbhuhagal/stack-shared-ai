@@ -1,37 +1,84 @@
 # stack-shared-ai
 
-CLI tool that scans your codebase and generates compact, structured index files for AI assistants — covering backend, frontend, and mobile development. Saves 50K+ tokens per AI conversation.
+CLI tool that scans your codebase and generates compact, structured markdown index files for AI assistants. Instead of letting your AI tool re-read thousands of files every conversation, point it at `.stack-shared-ai/` and save 50K+ tokens per session.
+
+Currently supports **Flutter** and **Express** projects, with a pluggable scanner architecture for adding more frameworks.
+
+## Installation
+
+```bash
+# Run directly without installing
+npx stack-shared-ai
+
+# Or install globally
+npm install -g stack-shared-ai
+stack-shared-ai
+```
 
 ## Quick Start
 
+From the root of your project:
+
 ```bash
-# Auto-detect frameworks and generate index files
+# Auto-detect framework and generate index files into .stack-shared-ai/
 npx stack-shared-ai
 
-# Custom output directory
-npx stack-shared-ai --output .claude/codex
-
-# Scan specific directories only
-npx stack-shared-ai --include src lib app
-
-# Force a specific framework
-npx stack-shared-ai --framework flutter
-npx stack-shared-ai --framework express
-
-# Preview without writing files
+# Preview what would be generated, without writing anything
 npx stack-shared-ai --dry-run --verbose
+
+# Scan a specific directory
+npx stack-shared-ai ./path/to/project
 ```
+
+After running, point your AI assistant at the `.stack-shared-ai/` folder (e.g. add it to your `CLAUDE.md`, `.cursorrules`, or equivalent).
 
 ## Supported Frameworks
 
-| Framework | Status | Detection |
-|-----------|--------|-----------|
-| Flutter   | In progress | `pubspec.yaml` with `flutter` dependency |
-| Express   | In progress | `package.json` with `express` dependency |
+| Framework | Detection | Generated Files |
+|-----------|-----------|-----------------|
+| **Flutter** | `pubspec.yaml` with `flutter` dependency | `deps.md`, `models.md`, `components.md`, `screens.md`, `state.md`, `api-client.md` |
+| **Express** | `package.json` with `express` dependency | `deps.md`, `routes.md`, `middleware.md`, `services.md`, `schema.md`, `config.md` |
 
-## Configuration
+Monorepos are supported — if no framework is found at the root, subdirectories are scanned.
 
-Create a `stack-shared-ai.config.json` in your project root:
+### What gets extracted
+
+**Flutter:**
+- `deps.md` — packages from `pubspec.yaml`
+- `models.md` — data classes, fields, Freezed/json_serializable models
+- `components.md` — reusable widgets
+- `screens.md` — screens and GoRouter routes
+- `state.md` — Riverpod / Provider / Bloc state
+- `api-client.md` — Dio / http API calls
+
+**Express:**
+- `deps.md` — packages from `package.json`
+- `routes.md` — Express routes and handlers
+- `middleware.md` — middleware stack
+- `services.md` — business logic modules
+- `schema.md` — database schema (e.g. Prisma)
+- `config.md` — env vars and config
+
+Both TypeScript and plain JavaScript Express projects are supported.
+
+## CLI Options
+
+| Flag | Description |
+|------|-------------|
+| `-o, --output <dir>` | Output directory (default: `.stack-shared-ai`) |
+| `-i, --include <dirs...>` | Only scan these directories |
+| `-e, --exclude <dirs...>` | Exclude these directories |
+| `-f, --framework <frameworks...>` | Force a specific framework (`flutter`, `express`) |
+| `-s, --schema <path>` | Path to database schema file (e.g. `prisma/schema.prisma`) |
+| `--format <format>` | Output format: `markdown` (default) or `json` |
+| `--dry-run` | Print what would be generated without writing files |
+| `--verbose` | Show detailed scanner output |
+
+CLI flags always override values from the config file.
+
+## Configuration File
+
+Create a `stack-shared-ai.config.json` in your project root to set defaults:
 
 ```json
 {
@@ -43,40 +90,16 @@ Create a `stack-shared-ai.config.json` in your project root:
 }
 ```
 
-CLI flags override config file values.
+## Using with AI Assistants
 
-## CLI Options
+After generating the index, reference `.stack-shared-ai/` from your assistant's instructions file. Example for Claude Code (`CLAUDE.md`):
 
-| Flag | Description |
-|------|-------------|
-| `-o, --output <dir>` | Output directory (default: `.stack-shared-ai`) |
-| `-i, --include <dirs...>` | Only scan these directories |
-| `-e, --exclude <dirs...>` | Exclude these directories |
-| `-f, --framework <frameworks...>` | Force specific framework(s) |
-| `-s, --schema <path>` | Path to database schema file |
-| `--format <format>` | Output format: `markdown` or `json` |
-| `--dry-run` | Preview without writing |
-| `--verbose` | Detailed output |
-| `--watch` | Re-generate on file changes |
+```markdown
+For an overview of this codebase, read the files in `.stack-shared-ai/`
+before exploring source files directly.
+```
 
-## Output
-
-Generated files are placed in `.stack-shared-ai/` (or your custom output directory):
-
-- `overview.md` — Architecture summary
-- `routes.md` — API routes (Express)
-- `screens.md` — Screen inventory (Flutter)
-- `schema.md` — Database schema
-- `state.md` — State management
-- `components.md` — Reusable widgets/components
-- `models.md` — Data models
-- `api-client.md` — API calls from mobile
-- `api-contract.md` — Backend <-> mobile alignment
-- `middleware.md` — Middleware stack
-- `services.md` — Business logic
-- `lib.md` — Utility functions
-- `config.md` — Env vars and config
-- `deps.md` — Dependencies
+Re-run `npx stack-shared-ai` after major refactors to keep the index fresh.
 
 ## License
 
