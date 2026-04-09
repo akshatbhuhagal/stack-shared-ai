@@ -9,6 +9,7 @@ import { parse as parseYaml } from "yaml";
 export type Framework =
   | "flutter"
   | "express"
+  | "nestjs"
   | "nextjs"
   | "bun"
   | "typescript"
@@ -53,7 +54,16 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
       const content = fs.readFileSync(packageJsonPath, "utf-8");
       const pkg = JSON.parse(content);
       const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-      if (deps.express) {
+      const isNest = !!(deps["@nestjs/core"] || deps["@nestjs/common"]);
+      if (isNest) {
+        results.push({
+          framework: "nestjs",
+          confidence: "high",
+          signal: "package.json with @nestjs/core or @nestjs/common",
+        });
+      }
+      // Skip Express if NestJS is present — @nestjs/platform-express pulls express transitively
+      if (deps.express && !isNest) {
         results.push({
           framework: "express",
           confidence: "high",
@@ -88,6 +98,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
       const noAppFramework = !results.some(
         (r) =>
           r.framework === "express" ||
+          r.framework === "nestjs" ||
           r.framework === "nextjs" ||
           r.framework === "flutter" ||
           r.framework === "bun",

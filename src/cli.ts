@@ -4,6 +4,7 @@ import { loadConfigFile, mergeConfig, Config } from "./config";
 import { run, registerScanner, registerCrossStackScanner } from "./runner";
 import { FlutterScanner } from "./scanners/flutter/index";
 import { ExpressScanner } from "./scanners/express/index";
+import { NestjsScanner } from "./scanners/nestjs/index";
 import { NextjsScanner } from "./scanners/nextjs/index";
 import { BunScanner } from "./scanners/bun/index";
 import { TypeScriptScanner } from "./scanners/typescript/index";
@@ -15,6 +16,7 @@ import { loadPlugins } from "./plugin-loader";
 // Register built-in framework scanners
 registerScanner("flutter", async () => new FlutterScanner());
 registerScanner("express", async () => new ExpressScanner());
+registerScanner("nestjs", async () => new NestjsScanner());
 registerScanner("nextjs", async () => new NextjsScanner());
 registerScanner("bun", async () => new BunScanner());
 registerScanner("typescript", async () => new TypeScriptScanner());

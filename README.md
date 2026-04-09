@@ -2,7 +2,7 @@
 
 CLI tool that scans your codebase and generates compact, structured markdown index files for AI assistants. Instead of letting your AI tool re-read thousands of files every conversation, point it at `.stack-shared-ai/` and save 50K+ tokens per session.
 
-Currently supports **Flutter**, **Express**, **Next.js**, **Bun**, and **TypeScript libraries**, with a pluggable scanner architecture for adding more frameworks.
+Currently supports **Flutter**, **Express**, **NestJS**, **Next.js**, **Bun**, and **TypeScript libraries**, with a pluggable scanner architecture for adding more frameworks.
 
 ## Installation
 
@@ -38,6 +38,7 @@ After running, point your AI assistant at the `.stack-shared-ai/` folder (e.g. a
 |-----------|-----------|-----------------|
 | **Flutter** | `pubspec.yaml` with `flutter` dependency | `deps.md`, `models.md`, `components.md`, `screens.md`, `state.md`, `api-client.md` |
 | **Express** | `package.json` with `express` dependency | `deps.md`, `routes.md`, `middleware.md`, `services.md`, `schema.md`, `config.md` |
+| **NestJS** | `package.json` with `@nestjs/core` or `@nestjs/common` | `deps.md`, `controllers.md`, `modules.md`, `providers.md`, `config.md` |
 | **Next.js** | `package.json` with `next` dependency | `deps.md`, `routes.md`, `layouts.md`, `server-actions.md`, `middleware.md`, `components.md`, `config.md` |
 | **Bun** | `bunfig.toml`, `@types/bun`, or scripts using `bun` | `deps.md`, `routes.md`, `config.md` |
 | **TypeScript library** | `package.json` with `typescript` and no app framework | `deps.md`, `exports.md`, `types.md`, `api.md` |
@@ -63,6 +64,15 @@ Monorepos are supported — if no framework is found at the root, subdirectories
 - `config.md` — env vars and config
 
 Both TypeScript and plain JavaScript Express projects are supported.
+
+**NestJS:**
+- `deps.md` — NestJS-tailored categories (Core, NestJS Modules, Database/ORM, Auth, GraphQL, etc.)
+- `controllers.md` — `@Controller('prefix')` classes with `@Get/@Post/@Put/@Patch/@Delete` routes, resolved full paths, `@UseGuards` annotations, handler names
+- `modules.md` — `@Module({ imports, controllers, providers, exports })` per module
+- `providers.md` — `@Injectable()` classes with public method signatures, grouped by directory
+- `config.md` — `.env.example` vars, `ConfigModule.forRoot` flags, `configService.get('KEY')` and `process.env.X` references
+
+NestJS detection suppresses the Express scanner to avoid double-scanning, since NestJS runs on top of Express by default.
 
 **Next.js:**
 - `deps.md` — packages, grouped (Auth, Database, State, Forms, UI, etc.)
@@ -91,7 +101,7 @@ Both TypeScript and plain JavaScript Express projects are supported.
 | `-o, --output <dir>` | Output directory (default: `.stack-shared-ai`) |
 | `-i, --include <dirs...>` | Only scan these directories |
 | `-e, --exclude <dirs...>` | Exclude these directories |
-| `-f, --framework <frameworks...>` | Force a specific framework (`flutter`, `express`, `nextjs`, `bun`, `typescript`) |
+| `-f, --framework <frameworks...>` | Force a specific framework (`flutter`, `express`, `nestjs`, `nextjs`, `bun`, `typescript`) |
 | `-s, --schema <path>` | Path to database schema file (e.g. `prisma/schema.prisma`) |
 | `--format <format>` | Output format: `markdown` (default) or `json` |
 | `--dry-run` | Print what would be generated without writing files |

@@ -25,12 +25,16 @@ const FILE_DESCRIPTIONS: Record<string, string> = {
   "exports.md": "Package public entry points (exports/main/types/bin)",
   "types.md": "Exported types, interfaces, and enums",
   "api.md": "Public API surface — exported functions and classes",
+  "nestjs-deps.md": "NestJS dependencies from package.json",
+  "controllers.md": "NestJS controllers with HTTP routes, guards, and handlers",
+  "modules.md": "NestJS modules — imports, controllers, providers, exports",
+  "providers.md": "NestJS @Injectable() providers — methods grouped by directory",
 };
 
 function describe(filename: string): string {
   if (FILE_DESCRIPTIONS[filename]) return FILE_DESCRIPTIONS[filename];
   // Strip framework prefix and try again
-  const stripped = filename.replace(/^(flutter|express|nextjs|bun|typescript)-/, "");
+  const stripped = filename.replace(/^(flutter|express|nestjs|nextjs|bun|typescript)-/, "");
   if (FILE_DESCRIPTIONS[stripped]) return FILE_DESCRIPTIONS[stripped];
   return "Generated index file";
 }
