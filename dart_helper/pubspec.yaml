@@ -1,0 +1,10 @@
+name: dart_extractor
+description: Symbol extraction helper for stack-shared-ai — emits JSON with classes/enums/fields/methods parsed via the official Dart analyzer.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  analyzer: ^6.4.0

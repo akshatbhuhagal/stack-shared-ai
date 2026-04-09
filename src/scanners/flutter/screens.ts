@@ -3,7 +3,7 @@ import * as path from "path";
 import { parse as parseYaml } from "yaml";
 import { ScanOptions, ScanResult } from "../types";
 import { walkFiles } from "../../utils/file-walker";
-import { parseClassDeclarations, DartClass } from "../../utils/dart-parser";
+import { getDartClasses, DartClass } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
 const SCREEN_DIRS = ["screens", "screen", "pages", "page", "views", "view"];
@@ -206,7 +206,7 @@ export async function scanScreens(options: ScanOptions): Promise<ScanResult | nu
 
     if (filePath.endsWith(".g.dart") || filePath.endsWith(".freezed.dart")) continue;
 
-    const classes = parseClassDeclarations(content, filePath);
+    const classes = getDartClasses(filePath, content);
     const relativePath = path.relative(options.rootDir, filePath).replace(/\\/g, "/");
 
     // Collect @RoutePage-annotated classes (AutoRoute)
@@ -298,7 +298,7 @@ export async function scanScreens(options: ScanOptions): Promise<ScanResult | nu
     const dialogRegex = /showDialog[^;]*?(?:builder:[^)]*?(?:const\s+)?(\w+Dialog|\w+BottomSheet)\s*\()/g;
     let match;
     while ((match = dialogRegex.exec(content)) !== null) {
-      const callerClasses = parseClassDeclarations(content, filePath);
+      const callerClasses = getDartClasses(filePath, content);
       const shownFrom = callerClasses.length > 0 ? callerClasses[0].name : path.basename(filePath, ".dart");
       dialogs.push({ name: match[1], shownFrom });
     }

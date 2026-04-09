@@ -3,7 +3,7 @@ import * as path from "path";
 import { parse as parseYaml } from "yaml";
 import { ScanOptions, ScanResult } from "../types";
 import { walkFiles } from "../../utils/file-walker";
-import { parseClassDeclarations, DartClass } from "../../utils/dart-parser";
+import { getDartClasses, DartClass } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
 type HttpPackage = "dio" | "http" | "retrofit" | "chopper" | "unknown";
@@ -221,7 +221,7 @@ export async function scanApiClient(options: ScanOptions): Promise<ScanResult | 
       baseUrl = extractBaseUrl(content);
     }
 
-    const classes = parseClassDeclarations(content, filePath);
+    const classes = getDartClasses(filePath, content);
 
     switch (httpPackage) {
       case "dio":

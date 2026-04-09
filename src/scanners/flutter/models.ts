@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ScanOptions, ScanResult } from "../types";
 import { walkFiles } from "../../utils/file-walker";
-import { parseClassDeclarations, parseEnumDeclarations, DartClass } from "../../utils/dart-parser";
+import { getDartClasses, getDartEnums, DartClass } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
 const MODEL_DIRS = ["models", "model", "entities", "entity", "data", "domain"];
@@ -87,7 +87,7 @@ export async function scanModels(options: ScanOptions): Promise<ScanResult | nul
       continue;
     }
 
-    const classes = parseClassDeclarations(content, filePath);
+    const classes = getDartClasses(filePath, content);
     const relativePath = path.relative(options.rootDir, filePath).replace(/\\/g, "/");
 
     for (const cls of classes) {
@@ -115,7 +115,7 @@ export async function scanModels(options: ScanOptions): Promise<ScanResult | nul
     }
 
     // Parse enums
-    const fileEnums = parseEnumDeclarations(content);
+    const fileEnums = getDartEnums(filePath, content);
     enums.push(...fileEnums);
   }
 

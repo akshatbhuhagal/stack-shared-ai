@@ -40,13 +40,14 @@ Scanners are registered in `cli.ts` via `registerScanner(framework, loaderFn)`. 
 - **TypeScript library** (`scanners/typescript/`): deps, exports, types, api
 
 **Parsing utilities:**
-- `utils/dart-parser.ts` — Regex-based Dart class/field/method extraction. Handles `this.param` constructor syntax by resolving against parsed fields.
+- `utils/dart-parser.ts` — Regex-based Dart class/field/method extraction. Handles `this.param` constructor syntax by resolving against parsed fields. Also exposes a symbol cache (`primeDartCache`, `getDartClasses`, `getDartEnums`) that sub-scanners consume so analyzer-backed results transparently replace regex output when available.
+- `utils/dart-analyzer-bridge.ts` — Bridge to the Dart analyzer helper in `dart_helper/`. When `dart` is on PATH, `FlutterScanner.scan()` runs the helper once per run and primes the cache with authoritative analyzer output; otherwise sub-scanners fall back to the regex parser. The helper lazy-runs `dart pub get` on first use.
 - `utils/ts-parser.ts` — Uses `ts-morph` for TypeScript/JS AST parsing. Has `allowJs: true` to support plain JS.
 - `utils/file-walker.ts` — Recursive directory traversal with include/exclude filtering.
 
 ## Key Design Decisions
 
-- Dart parsing uses regex (no Dart AST lib in JS); plan to add `dart analyze --format=json` for accuracy
+- Dart parsing prefers the official `analyzer` package via `dart_helper/` (run as a subprocess when the Dart SDK is on PATH); falls back to the regex parser otherwise. The two paths emit the same `DartClass`/`DartEnum` shape.
 - Express scanner must support plain JS from day 1 (not just TypeScript)
 - Output format supports both markdown and JSON
 - User-defined scanner plugins planned for v1

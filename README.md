@@ -45,6 +45,10 @@ After running, point your AI assistant at the `.stack-shared-ai/` folder (e.g. a
 
 Monorepos are supported — if no framework is found at the root, subdirectories are scanned.
 
+### Dart analyzer integration
+
+For Flutter projects, if the [Dart SDK](https://dart.dev/get-dart) is on `PATH`, the scanner uses the official `analyzer` package (via a small helper in `dart_helper/`) to extract classes, fields, and methods from `.dart` files. This produces more accurate results than the regex parser for edge cases (nested generics, complex constructor params, annotations). If Dart isn't installed, the scanner silently falls back to the regex parser — no configuration needed. The helper runs `dart pub get` once on first use.
+
 ### What gets extracted
 
 **Flutter:**

@@ -2,7 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { ScanOptions, ScanResult } from "../types";
 import { walkFiles } from "../../utils/file-walker";
-import { parseClassDeclarations, DartClass } from "../../utils/dart-parser";
+import { getDartClasses, DartClass } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
 const WIDGET_DIRS = ["widgets", "widget", "components", "component", "common", "shared", "ui"];
@@ -66,7 +66,7 @@ export async function scanComponents(options: ScanOptions): Promise<ScanResult |
       continue;
     }
 
-    const classes = parseClassDeclarations(content, filePath);
+    const classes = getDartClasses(filePath, content);
     const relativePath = path.relative(options.rootDir, filePath).replace(/\\/g, "/");
 
     for (const cls of classes) {

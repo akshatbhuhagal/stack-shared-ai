@@ -8,6 +8,9 @@ import { scanComponents } from "./components";
 import { scanScreens } from "./screens";
 import { scanState } from "./state";
 import { scanApiClient } from "./api-client";
+import { walkFiles } from "../../utils/file-walker";
+import { runDartExtractor, isDartAvailable } from "../../utils/dart-analyzer-bridge";
+import { primeDartCache, clearDartCache } from "../../utils/dart-parser";
 
 export class FlutterScanner implements Scanner {
   name = "flutter";
@@ -27,6 +30,29 @@ export class FlutterScanner implements Scanner {
   async scan(options: ScanOptions): Promise<ScanResult[]> {
     const results: ScanResult[] = [];
     const log = options.verbose ? console.log : () => {};
+
+    // Pre-warm the Dart symbol cache via the analyzer helper in one batch.
+    // Sub-scanners will transparently use these results via `getDartClasses`
+    // / `getDartEnums`; falls back to the regex parser if Dart is missing.
+    clearDartCache();
+    if (isDartAvailable()) {
+      const dartFiles = walkFiles(options.rootDir, {
+        include: options.include,
+        exclude: options.exclude,
+        extensions: [".dart"],
+      }).filter(
+        (f) => !f.endsWith(".g.dart") && !f.endsWith(".freezed.dart"),
+      );
+      const analyzed = runDartExtractor(dartFiles, options.verbose);
+      if (analyzed) {
+        primeDartCache(analyzed);
+        log(`  [flutter] Dart analyzer primed cache for ${analyzed.size} file(s)`);
+      } else {
+        log(`  [flutter] Dart analyzer unavailable — using regex parser fallback`);
+      }
+    } else if (options.verbose) {
+      log(`  [flutter] Dart SDK not on PATH — using regex parser`);
+    }
 
     const scanners = [
       { name: "deps", fn: scanDeps },

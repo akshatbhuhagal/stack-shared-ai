@@ -3,7 +3,7 @@ import * as path from "path";
 import { parse as parseYaml } from "yaml";
 import { ScanOptions, ScanResult } from "../types";
 import { walkFiles } from "../../utils/file-walker";
-import { parseClassDeclarations, DartClass, DartField, DartMethod } from "../../utils/dart-parser";
+import { getDartClasses, DartClass, DartField, DartMethod } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
 type StatePackage = "riverpod" | "bloc" | "getx" | "provider" | "mobx" | "unknown";
@@ -230,7 +230,7 @@ export async function scanState(options: ScanOptions): Promise<ScanResult | null
 
     if (filePath.endsWith(".g.dart") || filePath.endsWith(".freezed.dart")) continue;
 
-    const classes = parseClassDeclarations(content, filePath);
+    const classes = getDartClasses(filePath, content);
 
     switch (statePackage) {
       case "riverpod":

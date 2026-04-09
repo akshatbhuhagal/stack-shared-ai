@@ -244,6 +244,51 @@ function parseMethods(classBody: string): DartMethod[] {
   return methods;
 }
 
+// -----------------------------------------------------------------------
+// Analyzer-backed cache
+// -----------------------------------------------------------------------
+// The Flutter scanner may pre-populate this cache by running the Dart
+// analyzer helper in a single batch (see `utils/dart-analyzer-bridge.ts`
+// and `scanners/flutter/index.ts`). Sub-scanners should use
+// `getDartClasses(filePath, content)` / `getDartEnums(filePath, content)`
+// instead of calling `parseClassDeclarations` directly — those helpers
+// return cached analyzer output when available and fall back to the regex
+// parser otherwise.
+
+interface CachedDartFile {
+  classes: DartClass[];
+  enums: { name: string; values: string[] }[];
+}
+
+const dartSymbolCache = new Map<string, CachedDartFile>();
+
+export function primeDartCache(
+  entries: Map<string, CachedDartFile>,
+): void {
+  for (const [file, data] of entries) {
+    dartSymbolCache.set(file, data);
+  }
+}
+
+export function clearDartCache(): void {
+  dartSymbolCache.clear();
+}
+
+export function getDartClasses(filePath: string, content: string): DartClass[] {
+  const cached = dartSymbolCache.get(filePath);
+  if (cached) return cached.classes;
+  return parseClassDeclarations(content, filePath);
+}
+
+export function getDartEnums(
+  filePath: string,
+  content: string,
+): { name: string; values: string[] }[] {
+  const cached = dartSymbolCache.get(filePath);
+  if (cached) return cached.enums;
+  return parseEnumDeclarations(content);
+}
+
 export function parseEnumDeclarations(content: string): { name: string; values: string[] }[] {
   const enums: { name: string; values: string[] }[] = [];
   const regex = /enum\s+(\w+)\s*\{([^}]+)\}/g;
