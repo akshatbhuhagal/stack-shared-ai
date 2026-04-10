@@ -32,31 +32,22 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
 
   // Detect frameworks
   let frameworks: Framework[] = [];
+  let detected: Awaited<ReturnType<typeof detectFrameworks>> | null = null;
 
   if (config.frameworks.length > 0) {
     frameworks = config.frameworks as Framework[];
     console.log(`Using specified frameworks: ${frameworks.join(", ")}`);
   } else {
-    const detected = await detectFrameworks(rootDir);
+    detected = await detectFrameworks(rootDir);
     if (detected.length === 0) {
       console.log("No supported frameworks detected.");
       return;
     }
-    frameworks = [...new Set(detected.map((d) => d.framework))];
     for (const d of detected) {
       console.log(`Detected: ${d.framework} (${d.confidence}) — ${d.signal}`);
     }
+    frameworks = [...new Set(detected.map((d) => d.framework))];
   }
-
-  // Build scan options
-  const scanOptions: ScanOptions = {
-    rootDir,
-    include: config.include,
-    exclude: config.exclude,
-    schema: config.schema,
-    format: config.format,
-    verbose: config.verbose,
-  };
 
   // Run framework scanners, keeping results grouped by framework so we can
   // detect filename collisions (e.g. both Flutter and Express produce deps.md).
@@ -69,17 +60,34 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
       continue;
     }
 
-    const scanner = await loader();
-    const canScan = await scanner.detect(rootDir);
-    if (!canScan) {
-      log(`Scanner ${scanner.name} declined to scan (detect returned false)`);
-      continue;
-    }
+    // Collect all directories where this framework was detected (monorepo).
+    // For user-specified frameworks, fall back to the CLI rootDir.
+    const detectedDirs = detected
+      ? [...new Set(detected.filter((d) => d.framework === framework).map((d) => d.rootDir))]
+      : [rootDir];
 
-    log(`Running scanner: ${scanner.name}`);
-    const results = await scanner.scan(scanOptions);
-    perFrameworkResults.push({ framework, results });
-    log(`  Generated ${results.length} file(s)`);
+    for (const scanDir of detectedDirs) {
+      const scanner = await loader();
+      const canScan = await scanner.detect(scanDir);
+      if (!canScan) {
+        log(`Scanner ${scanner.name} declined to scan ${scanDir} (detect returned false)`);
+        continue;
+      }
+
+      const scanOptions: ScanOptions = {
+        rootDir: scanDir,
+        include: config.include,
+        exclude: config.exclude,
+        schema: config.schema,
+        format: config.format,
+        verbose: config.verbose,
+      };
+
+      log(`Running scanner: ${scanner.name} on ${scanDir}`);
+      const results = await scanner.scan(scanOptions);
+      perFrameworkResults.push({ framework, results });
+      log(`  Generated ${results.length} file(s)`);
+    }
   }
 
   // Collision resolution: if more than one framework produced results, prefix
@@ -102,10 +110,18 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
   }
 
   // Run cross-stack scanners (overview, api-contract, etc.)
+  const crossStackOptions: ScanOptions = {
+    rootDir,
+    include: config.include,
+    exclude: config.exclude,
+    schema: config.schema,
+    format: config.format,
+    verbose: config.verbose,
+  };
   for (const crossScanner of crossStackScanners) {
     try {
       log(`Running cross-stack scanner: ${crossScanner.name}`);
-      const result = await crossScanner.scan(allResults, frameworks, scanOptions);
+      const result = await crossScanner.scan(allResults, frameworks, crossStackOptions);
       if (result) {
         allResults.push(result);
         log(`  Generated ${result.filename}`);

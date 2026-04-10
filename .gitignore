@@ -7,6 +7,7 @@ dist/
 
 plan.md
 PROJECT_CONTEXT.md
+posts/
 
 # Dart helper build artifacts
 dart_helper/.dart_tool/

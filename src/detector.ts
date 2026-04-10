@@ -19,6 +19,8 @@ interface DetectionResult {
   framework: Framework;
   confidence: "high" | "medium";
   signal: string;
+  /** Directory where the framework was detected (may differ from the CLI rootDir in monorepos). */
+  rootDir: string;
 }
 
 export async function detectFrameworks(rootDir: string): Promise<DetectionResult[]> {
@@ -35,6 +37,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
           framework: "flutter",
           confidence: "high",
           signal: "pubspec.yaml with flutter dependency",
+          rootDir,
         });
       }
     } catch {
@@ -43,6 +46,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
         framework: "flutter",
         confidence: "medium",
         signal: "pubspec.yaml exists (parse failed)",
+        rootDir,
       });
     }
   }
@@ -60,6 +64,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
           framework: "nestjs",
           confidence: "high",
           signal: "package.json with @nestjs/core or @nestjs/common",
+          rootDir,
         });
       }
       // Skip Express if NestJS is present — @nestjs/platform-express pulls express transitively
@@ -68,6 +73,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
           framework: "express",
           confidence: "high",
           signal: "package.json with express dependency",
+          rootDir,
         });
       }
       if (deps.next) {
@@ -75,6 +81,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
           framework: "nextjs",
           confidence: "high",
           signal: "package.json with next dependency",
+          rootDir,
         });
       }
       // Bun: prefer bunfig.toml, but also @types/bun or "bun" runtime usage in scripts
@@ -91,6 +98,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
             : deps["@types/bun"]
             ? "package.json with @types/bun"
             : "scripts reference bun runtime",
+          rootDir,
         });
       }
       // TypeScript fallback: only flag a TS library when no app framework matched.
@@ -108,6 +116,7 @@ export async function detectFrameworks(rootDir: string): Promise<DetectionResult
           framework: "typescript",
           confidence: "medium",
           signal: "package.json with typescript dependency (no app framework detected)",
+          rootDir,
         });
       }
     } catch {
