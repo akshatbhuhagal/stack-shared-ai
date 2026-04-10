@@ -1,6 +1,6 @@
 {
   "name": "stack-shared-ai",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "CLI tool that scans your codebase and generates compact, structured index files for AI assistants",
   "main": "dist/cli.js",
   "bin": {
