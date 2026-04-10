@@ -6,14 +6,34 @@
   "bin": {
     "stack-shared-ai": "./bin/stack-shared-ai.js"
   },
+  "files": [
+    "dist/",
+    "bin/",
+    "dart_helper/pubspec.yaml",
+    "dart_helper/bin/",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "prepublishOnly": "tsc"
   },
-  "keywords": ["ai", "codex", "codebase", "scanner", "flutter", "express", "cli"],
-  "author": "",
+  "keywords": ["ai", "codebase", "scanner", "indexer", "flutter", "express", "nestjs", "nextjs", "bun", "typescript", "cli", "claude", "cursor", "copilot"],
+  "author": "Akshat Bhuhagal",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/akshatbhuhagal/stack-shared-AI.git"
+  },
+  "homepage": "https://github.com/akshatbhuhagal/stack-shared-AI#readme",
+  "bugs": {
+    "url": "https://github.com/akshatbhuhagal/stack-shared-AI/issues"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "type": "commonjs",
   "dependencies": {
     "commander": "^14.0.3",
