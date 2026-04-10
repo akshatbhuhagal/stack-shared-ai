@@ -1,0 +1,39 @@
+name: Publish to npm
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Check if version changed
+        id: version
+        run: |
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          NPM_VERSION=$(npm view stack-shared-ai version 2>/dev/null || echo "0.0.0")
+          if [ "$PACKAGE_VERSION" != "$NPM_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Publishing v$PACKAGE_VERSION (npm has v$NPM_VERSION)"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "Version v$PACKAGE_VERSION already published, skipping"
+          fi
+
+      - name: Publish
+        if: steps.version.outputs.changed == 'true'
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
