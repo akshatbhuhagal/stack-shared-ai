@@ -1,6 +1,6 @@
 {
   "name": "stack-shared-ai",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "CLI tool that scans your codebase and generates compact, structured index files for AI assistants",
   "main": "dist/cli.js",
   "bin": {
@@ -25,11 +25,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/akshatbhuhagal/stack-shared-AI.git"
+    "url": "git+https://github.com/akshatbhuhagal/stack-shared-ai.git"
   },
-  "homepage": "https://github.com/akshatbhuhagal/stack-shared-AI#readme",
+  "homepage": "https://github.com/akshatbhuhagal/stack-shared-ai#readme",
   "bugs": {
-    "url": "https://github.com/akshatbhuhagal/stack-shared-AI/issues"
+    "url": "https://github.com/akshatbhuhagal/stack-shared-ai/issues"
   },
   "engines": {
     "node": ">=18"
