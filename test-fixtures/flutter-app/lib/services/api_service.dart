@@ -1,10 +1,41 @@
 import 'package:dio/dio.dart';
 
+class AuthInterceptor extends Interceptor {
+  final String Function() getToken;
+  AuthInterceptor(this.getToken);
+
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    options.headers['Authorization'] = 'Bearer ${getToken()}';
+    handler.next(options);
+  }
+}
+
+class LoggingInterceptor extends InterceptorsWrapper {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    // ignore: avoid_print
+    print('→ ${options.method} ${options.uri}');
+    handler.next(options);
+  }
+
+  @override
+  void onResponse(Response response, ResponseInterceptorHandler handler) {
+    // ignore: avoid_print
+    print('← ${response.statusCode} ${response.requestOptions.uri}');
+    handler.next(response);
+  }
+}
+
 class ApiService {
   final Dio _dio;
   static const baseUrl = 'https://api.example.com/v1';
 
-  ApiService() : _dio = Dio(BaseOptions(baseUrl: baseUrl));
+  ApiService(String Function() tokenProvider)
+      : _dio = Dio(BaseOptions(baseUrl: baseUrl)) {
+    _dio.interceptors.add(AuthInterceptor(tokenProvider));
+    _dio.interceptors.add(LoggingInterceptor());
+  }
 
   Future<Response> login(String email, String password) {
     return _dio.post('/auth/login', data: {'email': email, 'password': password});

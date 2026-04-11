@@ -5,7 +5,15 @@ import { walkFiles } from "../../utils/file-walker";
 import { getDartClasses, DartClass } from "../../utils/dart-parser";
 import { heading, joinSections, bulletList } from "../../utils/markdown";
 
-const WIDGET_DIRS = ["widgets", "widget", "components", "component", "common", "shared", "ui"];
+// Directory names that signal reusable widgets. Covers feature-based layouts
+// where widgets live under features/<name>/presentation/widgets/ as well as
+// monolithic layouts with a top-level widgets/ dir.
+const WIDGET_DIRS = [
+  "widgets", "widget",
+  "components", "component",
+  "common", "shared", "ui",
+  "presentation", // features/*/presentation/widgets/
+];
 const SCREEN_DIRS = ["screens", "screen", "pages", "page", "views", "view"];
 const SCREEN_SUFFIXES = ["Screen", "Page", "View"];
 
@@ -73,8 +81,10 @@ export async function scanComponents(options: ScanOptions): Promise<ScanResult |
       if (!isWidget(cls)) continue;
       if (isScreen(cls, filePath)) continue;
 
-      // Only include if in widget-like dirs or if not in screen dirs
-      if (!isWidgetDir(filePath) && isScreenDir(filePath)) continue;
+      // Only include widgets that live under a widget-like directory.
+      // Skips root-level main.dart wrappers, one-off stateful widgets in
+      // service files, etc. — those aren't reusable components.
+      if (!isWidgetDir(filePath)) continue;
 
       const params = cls.constructorParams
         .filter((p) => p.name !== "key")

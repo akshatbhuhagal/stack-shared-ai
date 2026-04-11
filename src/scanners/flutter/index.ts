@@ -8,6 +8,12 @@ import { scanComponents } from "./components";
 import { scanScreens } from "./screens";
 import { scanState } from "./state";
 import { scanApiClient } from "./api-client";
+import { scanAssets } from "./assets";
+import { scanTheme } from "./theme";
+import { scanL10n } from "./l10n";
+import { scanDi } from "./di";
+import { scanApp } from "./app";
+import { scanRepositories } from "./repositories";
 import { walkFiles } from "../../utils/file-walker";
 import { runDartExtractor, isDartAvailable } from "../../utils/dart-analyzer-bridge";
 import { primeDartCache, clearDartCache } from "../../utils/dart-parser";
@@ -56,11 +62,17 @@ export class FlutterScanner implements Scanner {
 
     const scanners = [
       { name: "deps", fn: scanDeps },
+      { name: "app", fn: scanApp },
       { name: "models", fn: scanModels },
       { name: "components", fn: scanComponents },
       { name: "screens", fn: scanScreens },
       { name: "state", fn: scanState },
       { name: "api-client", fn: scanApiClient },
+      { name: "repositories", fn: scanRepositories },
+      { name: "theme", fn: scanTheme },
+      { name: "l10n", fn: scanL10n },
+      { name: "di", fn: scanDi },
+      { name: "assets", fn: scanAssets },
     ];
 
     for (const scanner of scanners) {

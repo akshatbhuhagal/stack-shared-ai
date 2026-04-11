@@ -32,11 +32,52 @@ interface StateEntry {
   providerName?: string;
   stateFields: string[];
   methods: string[];
+  // Shape of the associated state class, if one was found
+  stateShape?: {
+    name: string;
+    fields: string[];
+    variants?: string[]; // sealed/union variants (e.g. Initial | Authenticated | Error)
+  };
+}
+
+// Find a state-shape class by name across all parsed classes in the project.
+// Also collects sealed class variants: any class whose extends/implements/with
+// chain references the given name.
+function findStateShape(
+  name: string,
+  allClasses: DartClass[],
+): StateEntry["stateShape"] | undefined {
+  const shape = allClasses.find((c) => c.name === name);
+  if (!shape) return undefined;
+
+  const fields = shape.constructorParams.length > 0
+    ? shape.constructorParams.map((p) => `${p.name}: ${p.type}`)
+    : shape.fields.map((f) => `${f.name}: ${f.type}`);
+
+  // Collect variants (for sealed / freezed union types)
+  const variants: string[] = [];
+  for (const cls of allClasses) {
+    const parents: string[] = [];
+    if (cls.superclass) parents.push(cls.superclass.split("<")[0].trim());
+    if (parents.includes(name) && cls.name !== name) {
+      variants.push(cls.name);
+    }
+  }
+
+  return {
+    name,
+    fields,
+    variants: variants.length > 0 ? variants : undefined,
+  };
 }
 
 // --- Riverpod ---
 
-function parseRiverpodProviders(content: string, classes: DartClass[]): StateEntry[] {
+function parseRiverpodProviders(
+  content: string,
+  classes: DartClass[],
+  allClasses: DartClass[],
+): StateEntry[] {
   const entries: StateEntry[] = [];
 
   // Match provider declarations: final xxxProvider = StateNotifierProvider<...>(...)
@@ -48,8 +89,10 @@ function parseRiverpodProviders(content: string, classes: DartClass[]): StateEnt
     const providerType = match[2];
     const typeArgs = match[3] || "";
 
-    // Try to find the notifier class
-    const notifierName = typeArgs.split(",")[0]?.trim();
+    // Try to find the notifier class (first type arg) and state class (second)
+    const typeArgList = typeArgs.split(",").map((s) => s.trim());
+    const notifierName = typeArgList[0];
+    const stateName = typeArgList[1];
     const cls = classes.find((c) => c.name === notifierName);
 
     const entry: StateEntry = {
@@ -65,6 +108,10 @@ function parseRiverpodProviders(content: string, classes: DartClass[]): StateEnt
       entry.methods = cls.methods
         .filter((m) => !m.name.startsWith("_"))
         .map((m) => formatMethod(m));
+    }
+
+    if (stateName) {
+      entry.stateShape = findStateShape(stateName, allClasses);
     }
 
     entries.push(entry);
@@ -91,7 +138,7 @@ function parseRiverpodProviders(content: string, classes: DartClass[]): StateEnt
 
 // --- Bloc ---
 
-function parseBlocClasses(classes: DartClass[]): StateEntry[] {
+function parseBlocClasses(classes: DartClass[], allClasses: DartClass[]): StateEntry[] {
   const entries: StateEntry[] = [];
 
   for (const cls of classes) {
@@ -99,6 +146,13 @@ function parseBlocClasses(classes: DartClass[]): StateEntry[] {
 
     const isBlocOrCubit = cls.superclass.includes("Bloc<") || cls.superclass.includes("Cubit<");
     if (!isBlocOrCubit) continue;
+
+    // Extract type args: Bloc<AuthEvent, AuthState> or Cubit<AuthState>
+    const targsMatch = cls.superclass.match(/<([^>]+)>/);
+    const typeArgs = targsMatch ? targsMatch[1].split(",").map((s) => s.trim()) : [];
+    // For Bloc<Event, State> the state is the second arg; for Cubit<State> it's the first.
+    const isBloc = cls.superclass.includes("Bloc<");
+    const stateName = isBloc ? typeArgs[1] : typeArgs[0];
 
     const entry: StateEntry = {
       className: cls.name,
@@ -108,6 +162,10 @@ function parseBlocClasses(classes: DartClass[]): StateEntry[] {
         .filter((m) => !m.name.startsWith("_"))
         .map((m) => formatMethod(m)),
     };
+
+    if (stateName) {
+      entry.stateShape = findStateShape(stateName, allClasses);
+    }
 
     entries.push(entry);
   }
@@ -220,6 +278,8 @@ export async function scanState(options: ScanOptions): Promise<ScanResult | null
 
   const allEntries: StateEntry[] = [];
 
+  // First pass: parse every file's classes so state-shape lookups can cross files
+  const fileData: { filePath: string; content: string; classes: DartClass[] }[] = [];
   for (const filePath of dartFiles) {
     let content: string;
     try {
@@ -231,13 +291,18 @@ export async function scanState(options: ScanOptions): Promise<ScanResult | null
     if (filePath.endsWith(".g.dart") || filePath.endsWith(".freezed.dart")) continue;
 
     const classes = getDartClasses(filePath, content);
+    fileData.push({ filePath, content, classes });
+  }
 
+  const allClasses = fileData.flatMap((fd) => fd.classes);
+
+  for (const { content, classes } of fileData) {
     switch (statePackage) {
       case "riverpod":
-        allEntries.push(...parseRiverpodProviders(content, classes));
+        allEntries.push(...parseRiverpodProviders(content, classes, allClasses));
         break;
       case "bloc":
-        allEntries.push(...parseBlocClasses(classes));
+        allEntries.push(...parseBlocClasses(classes, allClasses));
         break;
       case "getx":
         allEntries.push(...parseGetXControllers(classes));
@@ -270,8 +335,17 @@ export async function scanState(options: ScanOptions): Promise<ScanResult | null
   for (const entry of allEntries) {
     const lines: string[] = [];
     if (entry.providerName) lines.push(`**Provider:** ${entry.providerName}`);
+    if (entry.stateShape) {
+      const variants = entry.stateShape.variants
+        ? ` (variants: ${entry.stateShape.variants.join(" | ")})`
+        : "";
+      lines.push(`**State:** ${entry.stateShape.name}${variants}`);
+      if (entry.stateShape.fields.length > 0) {
+        lines.push(`**State shape:** ${entry.stateShape.fields.join(", ")}`);
+      }
+    }
     if (entry.stateFields.length > 0) {
-      lines.push(`**State fields:** ${entry.stateFields.join(", ")}`);
+      lines.push(`**Notifier fields:** ${entry.stateFields.join(", ")}`);
     }
     if (entry.methods.length > 0) {
       lines.push(`**Methods:** ${entry.methods.join(", ")}`);

@@ -113,6 +113,7 @@ interface RawClass {
   methods: RawMethod[];
   constructorParams: RawParam[];
   filePath: string;
+  modifiers?: string[];
 }
 
 interface RawEnum {
@@ -178,6 +179,7 @@ function toDartClass(raw: RawClass): DartClass {
     methods,
     constructorParams: raw.constructorParams.map(resolveParam),
     filePath: raw.filePath,
+    modifiers: raw.modifiers,
   };
 }
 

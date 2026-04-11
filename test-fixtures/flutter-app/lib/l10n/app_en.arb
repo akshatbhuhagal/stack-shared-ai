@@ -1,0 +1,10 @@
+{
+  "@@locale": "en",
+  "appTitle": "Stack Demo",
+  "@appTitle": { "description": "The app title" },
+  "loginButton": "Sign in",
+  "welcomeMessage": "Welcome back, {name}!",
+  "@welcomeMessage": { "placeholders": { "name": { "type": "String" } } },
+  "cartEmpty": "Your cart is empty",
+  "checkout": "Checkout"
+}

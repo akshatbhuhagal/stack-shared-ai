@@ -5,7 +5,13 @@
       "Bash(npm install:*)",
       "Bash(npx tsc:*)",
       "Bash(node:*)",
-      "Bash(where dart:*)"
+      "Bash(where dart:*)",
+      "Bash(npm run:*)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(echo \"---EXIT $?---\")",
+      "Bash(echo \"Exit: $?\")"
     ]
   }
 }

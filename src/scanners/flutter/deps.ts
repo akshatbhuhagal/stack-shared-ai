@@ -100,6 +100,33 @@ function categorize(packageName: string): string {
   return "Other";
 }
 
+// Normalize a pubspec version entry to a display string.
+// Handles: "^1.2.3", { sdk: "flutter" }, { git: { url, ref } }, { path: "../pkg" },
+// { hosted: { name, url }, version }, or plain object with version key.
+function formatVersion(val: unknown): string {
+  if (val === null || val === undefined) return "any";
+  if (typeof val === "string") return val;
+  if (typeof val !== "object") return String(val);
+
+  const obj = val as Record<string, unknown>;
+  if (typeof obj.sdk === "string") return `sdk: ${obj.sdk}`;
+  if (obj.git) {
+    if (typeof obj.git === "string") return `git: ${obj.git}`;
+    const git = obj.git as Record<string, unknown>;
+    const url = git.url ?? git.repo ?? "?";
+    const ref = git.ref ? `@${git.ref}` : "";
+    const sub = git.path ? ` (${git.path})` : "";
+    return `git: ${url}${ref}${sub}`;
+  }
+  if (typeof obj.path === "string") return `path: ${obj.path}`;
+  if (obj.hosted) {
+    const ver = typeof obj.version === "string" ? obj.version : "any";
+    return `${ver} (hosted)`;
+  }
+  if (typeof obj.version === "string") return obj.version;
+  return "custom";
+}
+
 export async function scanDeps(options: ScanOptions): Promise<ScanResult | null> {
   const pubspecPath = path.join(options.rootDir, "pubspec.yaml");
   if (!fs.existsSync(pubspecPath)) return null;
@@ -114,6 +141,7 @@ export async function scanDeps(options: ScanOptions): Promise<ScanResult | null>
 
   const deps = (pubspec.dependencies ?? {}) as Record<string, unknown>;
   const devDeps = (pubspec.dev_dependencies ?? {}) as Record<string, unknown>;
+  const overrides = (pubspec.dependency_overrides ?? {}) as Record<string, unknown>;
 
   // Remove flutter SDK itself from deps listing
   const filteredDeps = Object.entries(deps).filter(
@@ -124,7 +152,9 @@ export async function scanDeps(options: ScanOptions): Promise<ScanResult | null>
     ([name, val]) => name !== "flutter_test" && !(typeof val === "object" && val !== null && "sdk" in (val as Record<string, unknown>))
   );
 
-  if (filteredDeps.length === 0 && filteredDevDeps.length === 0) return null;
+  const filteredOverrides = Object.entries(overrides);
+
+  if (filteredDeps.length === 0 && filteredDevDeps.length === 0 && filteredOverrides.length === 0) return null;
 
   // Group by category
   const grouped: Record<string, string[]> = {};
@@ -132,8 +162,7 @@ export async function scanDeps(options: ScanOptions): Promise<ScanResult | null>
   for (const [name, version] of filteredDeps) {
     const cat = categorize(name);
     if (!grouped[cat]) grouped[cat] = [];
-    const ver = typeof version === "string" ? version : (typeof version === "object" && version !== null ? "path/git" : "any");
-    grouped[cat].push(`${name}: ${ver}`);
+    grouped[cat].push(`${name}: ${formatVersion(version)}`);
   }
 
   // Build markdown
@@ -156,8 +185,7 @@ export async function scanDeps(options: ScanOptions): Promise<ScanResult | null>
     for (const [name, version] of filteredDevDeps) {
       const cat = categorize(name);
       if (!devGrouped[cat]) devGrouped[cat] = [];
-      const ver = typeof version === "string" ? version : "path/git";
-      devGrouped[cat].push(`${name}: ${ver}`);
+      devGrouped[cat].push(`${name}: ${formatVersion(version)}`);
     }
 
     sections.push(heading(2, "Dev Dependencies"));
@@ -169,6 +197,15 @@ export async function scanDeps(options: ScanOptions): Promise<ScanResult | null>
     for (const cat of sortedDevCats) {
       sections.push(joinSections(heading(3, cat), bulletList(devGrouped[cat])));
     }
+  }
+
+  // Dependency overrides — important when present since they pin versions
+  // across the whole transitive graph. AI assistants should know these exist.
+  if (filteredOverrides.length > 0) {
+    const overrideLines = filteredOverrides.map(
+      ([name, val]) => `${name}: ${formatVersion(val)}`,
+    );
+    sections.push(joinSections(heading(2, "Dependency Overrides"), bulletList(overrideLines)));
   }
 
   const content = sections.join("\n\n") + "\n";

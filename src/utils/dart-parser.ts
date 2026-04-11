@@ -7,6 +7,19 @@ export interface DartClass {
   methods: DartMethod[];
   constructorParams: DartParam[];
   filePath: string;
+  // Dart 3 class modifiers (sealed, base, final, interface, abstract)
+  modifiers?: string[];
+}
+
+export interface DartExtension {
+  name: string;
+  on: string;
+  members: string[]; // method/getter names
+}
+
+export interface DartTypedef {
+  name: string;
+  value: string; // the right-hand side of the typedef
 }
 
 export interface DartField {
@@ -55,20 +68,25 @@ export function parseClassDeclarations(content: string, filePath: string): DartC
       continue;
     }
 
-    // Match class declaration
+    // Match class declaration, including Dart 3 modifiers:
+    //   sealed class, base class, final class, interface class, abstract class,
+    //   plus combos like "abstract base class", "sealed class" (used by freezed union types).
     const classMatch = line.match(
-      /^(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+([\w<>,?\s]+))?(?:\s+with\s+([\w,\s]+))?(?:\s+implements\s+([\w,\s]+))?\s*\{?/
+      /^((?:(?:abstract|sealed|base|final|interface|mixin)\s+)*)class\s+(\w+)(?:\s+extends\s+([\w<>,?\s]+))?(?:\s+with\s+([\w,\s]+))?(?:\s+implements\s+([\w,\s]+))?\s*\{?/
     );
     if (classMatch) {
+      const modifiersStr = classMatch[1] || "";
+      const modifiers = modifiersStr.trim().split(/\s+/).filter(Boolean);
       const dartClass: DartClass = {
-        name: classMatch[1],
-        superclass: classMatch[2]?.trim(),
-        mixins: classMatch[3] ? classMatch[3].split(",").map((m) => m.trim()) : [],
+        name: classMatch[2],
+        superclass: classMatch[3]?.trim(),
+        mixins: classMatch[4] ? classMatch[4].split(",").map((m) => m.trim()) : [],
         annotations: [...currentAnnotations],
         fields: [],
         methods: [],
         constructorParams: [],
         filePath,
+        modifiers: modifiers.length > 0 ? modifiers : undefined,
       };
 
       // Parse class body for fields and methods
@@ -287,6 +305,67 @@ export function getDartEnums(
   const cached = dartSymbolCache.get(filePath);
   if (cached) return cached.enums;
   return parseEnumDeclarations(content);
+}
+
+// extension NameOnType on TypeArg<...> { ... }
+// Also matches: extension type NameType(Inner value) { ... }  (Dart 3 extension types)
+export function parseExtensionDeclarations(content: string): DartExtension[] {
+  const out: DartExtension[] = [];
+  const re = /extension\s+(?:type\s+)?(\w+)(?:<[^>]+>)?\s+on\s+([\w<>?, ]+?)\s*\{/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const name = m[1];
+    const on = m[2].trim();
+    // Extract method/getter names from the body — shallow scan, up to the
+    // next top-level `}`. This is best-effort; the analyzer path is richer.
+    const bodyStart = m.index + m[0].length;
+    let depth = 1;
+    let i = bodyStart;
+    while (i < content.length && depth > 0) {
+      const c = content[i];
+      if (c === "{") depth++;
+      else if (c === "}") depth--;
+      i++;
+    }
+    const body = content.slice(bodyStart, i - 1);
+    const members: string[] = [];
+    // Getters:   double get total => ...   /   int get count { ... }
+    const getterRe = /\bget\s+(\w+)\s*(?:=>|\{)/g;
+    let mm: RegExpExecArray | null;
+    while ((mm = getterRe.exec(body)) !== null) {
+      if (!members.includes(mm[1])) members.push(mm[1]);
+    }
+    // Methods:   void foo() { ... } / Type foo(args) => ... / static Type foo(...)
+    const methodRe = /(?:^|\n)\s+(?:static\s+)?(?:[\w<>?, ]+\s+)(\w+)\s*\(/g;
+    while ((mm = methodRe.exec(body)) !== null) {
+      const name = mm[1];
+      if (["if", "for", "while", "return", "switch", "try", "do"].includes(name)) continue;
+      if (!members.includes(name)) members.push(name);
+    }
+    out.push({ name, on, members });
+  }
+  return out;
+}
+
+// typedef Name = Type;  (Dart 2.13+ syntax)
+// typedef Name = void Function(int x);
+// Legacy typedef void Callback(int x);   — also handled.
+export function parseTypedefDeclarations(content: string): DartTypedef[] {
+  const out: DartTypedef[] = [];
+  // Modern syntax
+  const modernRe = /typedef\s+(\w+)(?:<[^>]+>)?\s*=\s*([^;]+);/g;
+  let m: RegExpExecArray | null;
+  while ((m = modernRe.exec(content)) !== null) {
+    out.push({ name: m[1], value: m[2].trim().replace(/\s+/g, " ") });
+  }
+  // Legacy syntax: typedef <ReturnType> Name(params);
+  const legacyRe = /typedef\s+([\w<>?, ]+?)\s+(\w+)\s*\(([^)]*)\)\s*;/g;
+  while ((m = legacyRe.exec(content)) !== null) {
+    // Skip if already captured by modern form
+    if (out.some((t) => t.name === m![2])) continue;
+    out.push({ name: m[2], value: `${m[1].trim()} Function(${m[3].trim()})` });
+  }
+  return out;
 }
 
 export function parseEnumDeclarations(content: string): { name: string; values: string[] }[] {

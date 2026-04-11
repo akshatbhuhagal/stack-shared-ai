@@ -171,10 +171,67 @@ function parseChopperMethods(classes: DartClass[], content: string, filePath: st
 }
 
 function extractBaseUrl(content: string): string | null {
-  // Look for baseUrl assignment
-  const baseUrlRegex = /baseUrl['":\s]*=?\s*['"]([^'"]+)['"]/i;
+  // Prefer BaseOptions(baseUrl: '...') since it's the canonical Dio setup
+  const baseOptionsMatch = content.match(/BaseOptions\s*\([^)]*?baseUrl\s*:\s*['"]([^'"]+)['"]/);
+  if (baseOptionsMatch) return baseOptionsMatch[1];
+
+  // Plain `baseUrl: 'x'` or `baseUrl = 'x'` or `const baseUrl = 'x'`
+  const baseUrlRegex = /baseUrl\s*[:=]\s*['"]([^'"]+)['"]/i;
   const match = content.match(baseUrlRegex);
   return match ? match[1] : null;
+}
+
+interface InterceptorInfo {
+  name: string;
+  file: string;
+  hints: string[]; // short tags: "auth", "logging", "retry", "error"
+}
+
+// Detect Dio interceptors. Two forms exist:
+//   1. A class that extends Interceptor / InterceptorsWrapper / QueuedInterceptor
+//   2. An instance added via `dio.interceptors.add(Foo())`
+// We surface (1) — it's what users actually read when looking for "where is auth
+// header added?" or "where does retry live?".
+function parseInterceptors(classes: DartClass[], content: string, filePath: string): InterceptorInfo[] {
+  const out: InterceptorInfo[] = [];
+
+  for (const cls of classes) {
+    if (!cls.superclass) continue;
+    const base = cls.superclass;
+    const isInterceptor =
+      base.includes("Interceptor") ||
+      base.includes("InterceptorsWrapper") ||
+      base.includes("QueuedInterceptor");
+    if (!isInterceptor) continue;
+
+    // Heuristic tags based on class + method names
+    const hints: string[] = [];
+    const classText = (cls.name + " " + cls.methods.map((m) => m.name).join(" ")).toLowerCase();
+    if (/auth|token|bearer|authorization/.test(classText)) hints.push("auth");
+    if (/log|logger|pretty/.test(classText)) hints.push("logging");
+    if (/retry|backoff/.test(classText)) hints.push("retry");
+    if (/error|exception|fail/.test(classText)) hints.push("error-handling");
+    if (/cache/.test(classText)) hints.push("cache");
+
+    out.push({ name: cls.name, file: filePath, hints });
+  }
+
+  // Also detect inline wrapper registrations: dio.interceptors.add(InterceptorsWrapper(...))
+  // These don't have a class name — surface them as anonymous with the file path.
+  const wrapperRe = /\.interceptors\.add\s*\(\s*InterceptorsWrapper\s*\(/g;
+  if (wrapperRe.test(content)) {
+    // Only add if we haven't already captured a class-based interceptor from this file
+    if (!out.some((i) => i.file === filePath)) {
+      out.push({ name: "InterceptorsWrapper (inline)", file: filePath, hints: [] });
+    }
+  }
+
+  // pretty_dio_logger usage
+  if (/PrettyDioLogger\s*\(/.test(content)) {
+    out.push({ name: "PrettyDioLogger", file: filePath, hints: ["logging"] });
+  }
+
+  return out;
 }
 
 function groupByResource(endpoints: ApiEndpoint[]): Record<string, ApiEndpoint[]> {
@@ -204,6 +261,7 @@ export async function scanApiClient(options: ScanOptions): Promise<ScanResult | 
   });
 
   const allEndpoints: ApiEndpoint[] = [];
+  const interceptors: InterceptorInfo[] = [];
   let baseUrl: string | null = null;
 
   for (const filePath of dartFiles) {
@@ -226,11 +284,13 @@ export async function scanApiClient(options: ScanOptions): Promise<ScanResult | 
     switch (httpPackage) {
       case "dio":
         allEndpoints.push(...parseDioCalls(content, filePath));
+        interceptors.push(...parseInterceptors(classes, content, filePath));
         break;
       case "retrofit":
         allEndpoints.push(...parseRetrofitMethods(classes, content, filePath));
         // Retrofit uses Dio underneath, also check for raw Dio calls
         allEndpoints.push(...parseDioCalls(content, filePath));
+        interceptors.push(...parseInterceptors(classes, content, filePath));
         break;
       case "http":
         allEndpoints.push(...parseHttpPackageCalls(content, filePath));
@@ -241,7 +301,7 @@ export async function scanApiClient(options: ScanOptions): Promise<ScanResult | 
     }
   }
 
-  if (allEndpoints.length === 0) return null;
+  if (allEndpoints.length === 0 && interceptors.length === 0) return null;
 
   // Deduplicate by method + path
   const seen = new Set<string>();
@@ -257,6 +317,25 @@ export async function scanApiClient(options: ScanOptions): Promise<ScanResult | 
 
   if (baseUrl) {
     sections.push(`## Base URL: \`${baseUrl}\``);
+  }
+
+  // Interceptors — surface before endpoints so assistants know how requests
+  // are mutated globally (auth headers, retry, logging) before reading any
+  // specific endpoint.
+  if (interceptors.length > 0) {
+    const seen = new Set<string>();
+    const uniqueInterceptors = interceptors.filter((i) => {
+      const key = `${i.name}|${i.file}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    const lines = uniqueInterceptors.map((i) => {
+      const rel = path.relative(options.rootDir, i.file).replace(/\\/g, "/");
+      const tags = i.hints.length > 0 ? ` [${i.hints.join(", ")}]` : "";
+      return `${i.name}${tags} — ${rel}`;
+    });
+    sections.push(joinSections(heading(2, "Interceptors"), bulletList(lines)));
   }
 
   const grouped = groupByResource(uniqueEndpoints);

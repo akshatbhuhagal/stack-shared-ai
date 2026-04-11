@@ -1,0 +1,8 @@
+{
+  "@@locale": "es",
+  "appTitle": "Demo Stack",
+  "loginButton": "Iniciar sesión",
+  "welcomeMessage": "¡Bienvenido de nuevo, {name}!",
+  "cartEmpty": "Tu carrito está vacío",
+  "checkout": "Pagar"
+}

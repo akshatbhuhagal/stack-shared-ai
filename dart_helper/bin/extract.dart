@@ -105,6 +105,14 @@ class _SymbolVisitor extends RecursiveAstVisitor<void> {
       }
     }
 
+    // Dart 3 class modifiers — analyzer exposes each as an optional token.
+    final modifiers = <String>[];
+    if (node.abstractKeyword != null) modifiers.add('abstract');
+    if (node.sealedKeyword != null) modifiers.add('sealed');
+    if (node.baseKeyword != null) modifiers.add('base');
+    if (node.finalKeyword != null) modifiers.add('final');
+    if (node.interfaceKeyword != null) modifiers.add('interface');
+
     classes.add({
       'name': node.name.lexeme,
       'superclass': node.extendsClause?.superclass.toSource(),
@@ -115,6 +123,7 @@ class _SymbolVisitor extends RecursiveAstVisitor<void> {
       'methods': methods,
       'constructorParams': constructorParams,
       'filePath': filePath,
+      if (modifiers.isNotEmpty) 'modifiers': modifiers,
     });
 
     super.visitClassDeclaration(node);

@@ -47,41 +47,140 @@ interface RouteInfo {
   children?: RouteInfo[];
 }
 
+// Find the matching closing character for the opening char at position `start`.
+// Supports (), [], {}. Returns the index of the matching close, or -1 if unbalanced.
+function findMatchingClose(content: string, start: number): number {
+  const open = content[start];
+  const closeMap: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
+  const close = closeMap[open];
+  if (!close) return -1;
+
+  let depth = 0;
+  let inString: string | null = null;
+  for (let i = start; i < content.length; i++) {
+    const c = content[i];
+    // Skip inside string literals
+    if (inString) {
+      if (c === "\\") { i++; continue; }
+      if (c === inString) inString = null;
+      continue;
+    }
+    if (c === '"' || c === "'") { inString = c; continue; }
+    if (c === "/" && content[i + 1] === "/") {
+      const nl = content.indexOf("\n", i);
+      if (nl === -1) return -1;
+      i = nl;
+      continue;
+    }
+    if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) return i;
+    }
+  }
+  return -1;
+}
+
+// Extract the top-level block body for `Keyword(...)` starting at position `start`.
+// Returns the body (inside the parens) and the index just past the closing paren.
+function extractCallBody(content: string, start: number): { body: string; end: number } | null {
+  const openParen = content.indexOf("(", start);
+  if (openParen === -1) return null;
+  const close = findMatchingClose(content, openParen);
+  if (close === -1) return null;
+  return { body: content.slice(openParen + 1, close), end: close + 1 };
+}
+
+// Recursively parse GoRouter-style route definitions. Handles:
+//   GoRoute(path: '/x', builder: ..., routes: [GoRoute(...)])
+//   ShellRoute(builder: (_, __, child) => ..., routes: [GoRoute(...)])
+//   StatefulShellRoute.indexedStack(branches: [StatefulShellBranch(routes: [...])])
+// Children inherit their parent's path prefix so nested routes report absolute paths.
 function parseGoRouterRoutes(content: string): RouteInfo[] {
   const routes: RouteInfo[] = [];
 
-  // Match GoRoute definitions
-  const goRouteRegex = /GoRoute\s*\(\s*(?:name:\s*['"][^'"]*['"]\s*,\s*)?path:\s*['"]([^'"]+)['"]/g;
-  let match;
-
-  while ((match = goRouteRegex.exec(content)) !== null) {
-    const routePath = match[1];
-    // Extract this GoRoute's block (up to the next GoRoute or a limited window)
-    const blockStart = match.index;
-    const nextGoRoute = content.indexOf("GoRoute", blockStart + 10);
-    const blockEnd = nextGoRoute > blockStart ? nextGoRoute : blockStart + 500;
-    const afterMatch = content.substring(blockStart, blockEnd);
-
-    let screen = "Unknown";
-    const builderMatch = afterMatch.match(/(?:builder|pageBuilder):[^>]*?>\s*(?:const\s+)?(\w+)/);
-    if (builderMatch) {
-      screen = builderMatch[1];
-    }
-
-    // Check for params
-    const paramMatches = routePath.match(/:(\w+)/g);
-    const params = paramMatches ? paramMatches.map((p) => p.slice(1)).join(", ") : undefined;
-
-    // Check for redirect/guard only within this route's block
-    let guard: string | undefined;
-    if (afterMatch.includes("redirect:")) {
-      const redirectMatch = afterMatch.match(/redirect:[^}]*?(auth|login|guard)/i);
-      guard = redirectMatch ? "auth-required" : "has-redirect";
-    }
-
-    routes.push({ path: routePath, screen, params, guard });
+  function joinPath(parent: string, child: string): string {
+    if (child.startsWith("/")) return child; // absolute
+    if (!parent || parent === "/") return `/${child.replace(/^\//, "")}`;
+    return `${parent.replace(/\/$/, "")}/${child}`;
   }
 
+  // Parse the contents of a routes: [...] list, starting at `body` (already
+  // unwrapped). Adds results to `routes`. `parentPath` is the prefix inherited
+  // from enclosing shells.
+  function parseRouteList(body: string, parentPath: string, shellContext?: string): void {
+    // Scan for GoRoute / ShellRoute / StatefulShellRoute / StatefulShellBranch calls
+    const keywordRe = /\b(GoRoute|ShellRoute|StatefulShellRoute(?:\.\w+)?|StatefulShellBranch)\s*\(/g;
+    let m: RegExpExecArray | null;
+    while ((m = keywordRe.exec(body)) !== null) {
+      const keyword = m[1];
+      const blockStart = m.index + m[0].length - 1; // at '('
+      const close = findMatchingClose(body, blockStart);
+      if (close === -1) break;
+      const block = body.slice(blockStart + 1, close);
+
+      if (keyword === "GoRoute") {
+        const pathMatch = block.match(/\bpath\s*:\s*['"]([^'"]+)['"]/);
+        const routePath = pathMatch ? pathMatch[1] : "?";
+        const absolutePath = joinPath(parentPath, routePath);
+
+        // Screen builder — find either `builder:` or `pageBuilder:` and read the
+        // first identifier that follows the fat-arrow (or call target).
+        let screen = "Unknown";
+        const builderMatch = block.match(/(?:builder|pageBuilder)\s*:[^}]*?=>\s*(?:const\s+)?(\w+)/);
+        if (builderMatch) screen = builderMatch[1];
+
+        const paramMatches = absolutePath.match(/:(\w+)/g);
+        const params = paramMatches ? paramMatches.map((p) => p.slice(1)).join(", ") : undefined;
+
+        let guard: string | undefined;
+        if (shellContext) guard = shellContext;
+        if (/\bredirect\s*:/.test(block)) {
+          guard = guard ? `${guard}, has-redirect` : "has-redirect";
+        }
+
+        routes.push({ path: absolutePath, screen, params, guard });
+
+        // Recurse into nested routes: [ ... ]
+        const nested = findRoutesArray(block);
+        if (nested) parseRouteList(nested, absolutePath, shellContext);
+
+        // Jump lastIndex past this block so we don't re-enter it
+        keywordRe.lastIndex = close + 1;
+      } else if (keyword === "ShellRoute" || keyword.startsWith("StatefulShellRoute")) {
+        // Shell doesn't consume a path; children carry the parent path prefix.
+        const label = keyword === "ShellRoute" ? "shell" : "stateful-shell";
+        const nestedRoutes = findRoutesArray(block);
+        if (nestedRoutes) parseRouteList(nestedRoutes, parentPath, label);
+        // StatefulShellRoute may use `branches: [...]` instead
+        const branches = findNamedArray(block, "branches");
+        if (branches) parseRouteList(branches, parentPath, label);
+        keywordRe.lastIndex = close + 1;
+      } else if (keyword === "StatefulShellBranch") {
+        // Each branch has its own routes: [...]
+        const branchRoutes = findRoutesArray(block);
+        if (branchRoutes) parseRouteList(branchRoutes, parentPath, shellContext ?? "branch");
+        keywordRe.lastIndex = close + 1;
+      }
+    }
+  }
+
+  // Find the `routes: [ ... ]` array inside a block and return its inner body.
+  function findRoutesArray(block: string): string | null {
+    return findNamedArray(block, "routes");
+  }
+
+  function findNamedArray(block: string, name: string): string | null {
+    const re = new RegExp(`\\b${name}\\s*:\\s*(?:<[^>]+>)?\\s*\\[`, "g");
+    const m = re.exec(block);
+    if (!m) return null;
+    const openBracket = m.index + m[0].length - 1;
+    const close = findMatchingClose(block, openBracket);
+    if (close === -1) return null;
+    return block.slice(openBracket + 1, close);
+  }
+
+  parseRouteList(content, "");
   return routes;
 }
 
