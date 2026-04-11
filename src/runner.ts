@@ -3,6 +3,7 @@ import * as path from "path";
 import { Config } from "./config";
 import { Scanner, CrossStackScanner, ScanOptions, ScanResult } from "./scanners/types";
 import { detectFrameworks, Framework } from "./detector";
+import { Spinner } from "./utils/spinner";
 
 // Framework scanner registry
 const scannerRegistry: Map<Framework, () => Promise<Scanner>> = new Map();
@@ -29,6 +30,9 @@ export async function run(rootDir: string, config: Config): Promise<void> {
 
 async function runOnce(rootDir: string, config: Config): Promise<void> {
   const log = config.verbose ? console.log : () => {};
+  // Spinner is disabled in verbose mode (would clobber logs) and in watch mode
+  // where we want quieter re-runs.
+  const spinner = new Spinner({ enabled: !config.verbose && !!process.stdout.isTTY });
 
   // Detect frameworks
   let frameworks: Framework[] = [];
@@ -38,15 +42,22 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
     frameworks = config.frameworks as Framework[];
     console.log(`Using specified frameworks: ${frameworks.join(", ")}`);
   } else {
+    spinner.start("Detecting frameworks...");
     detected = await detectFrameworks(rootDir);
     if (detected.length === 0) {
-      console.log("No supported frameworks detected.");
+      spinner.fail("No supported frameworks detected.");
       return;
     }
-    for (const d of detected) {
-      console.log(`Detected: ${d.framework} (${d.confidence}) — ${d.signal}`);
+    const frameworkList = [...new Set(detected.map((d) => d.framework))];
+    spinner.succeed(
+      `Detected ${frameworkList.length} framework${frameworkList.length === 1 ? "" : "s"}: ${frameworkList.join(", ")}`,
+    );
+    if (config.verbose) {
+      for (const d of detected) {
+        console.log(`  ${d.framework} (${d.confidence}) — ${d.signal}`);
+      }
     }
-    frameworks = [...new Set(detected.map((d) => d.framework))];
+    frameworks = frameworkList;
   }
 
   // Run framework scanners, keeping results grouped by framework so we can
@@ -83,9 +94,12 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
         verbose: config.verbose,
       };
 
+      const relDir = path.relative(rootDir, scanDir) || ".";
+      spinner.start(`Scanning ${scanner.name} in ${relDir}...`);
       log(`Running scanner: ${scanner.name} on ${scanDir}`);
       const results = await scanner.scan(scanOptions);
       perFrameworkResults.push({ framework, results });
+      spinner.succeed(`Scanned ${scanner.name} (${relDir}) → ${results.length} file${results.length === 1 ? "" : "s"}`);
       log(`  Generated ${results.length} file(s)`);
     }
   }
@@ -118,23 +132,28 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
     format: config.format,
     verbose: config.verbose,
   };
-  for (const crossScanner of crossStackScanners) {
-    try {
-      log(`Running cross-stack scanner: ${crossScanner.name}`);
-      const result = await crossScanner.scan(allResults, frameworks, crossStackOptions);
-      if (result) {
-        allResults.push(result);
-        log(`  Generated ${result.filename}`);
-      } else {
-        log(`  Cross-stack scanner ${crossScanner.name} produced no output`);
+  if (crossStackScanners.length > 0) {
+    spinner.start("Running cross-stack scanners...");
+    for (const crossScanner of crossStackScanners) {
+      try {
+        spinner.update(`Running cross-stack scanner: ${crossScanner.name}...`);
+        log(`Running cross-stack scanner: ${crossScanner.name}`);
+        const result = await crossScanner.scan(allResults, frameworks, crossStackOptions);
+        if (result) {
+          allResults.push(result);
+          log(`  Generated ${result.filename}`);
+        } else {
+          log(`  Cross-stack scanner ${crossScanner.name} produced no output`);
+        }
+      } catch (err) {
+        console.warn(`Error in cross-stack scanner ${crossScanner.name}: ${err}`);
       }
-    } catch (err) {
-      console.warn(`Error in cross-stack scanner ${crossScanner.name}: ${err}`);
     }
+    spinner.succeed("Cross-stack scanners complete");
   }
 
   if (allResults.length === 0) {
-    console.log("No output files generated.");
+    spinner.fail("No output files generated.");
     return;
   }
 
@@ -154,6 +173,8 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
     return;
   }
 
+  spinner.start(`Writing ${allResults.length} file${allResults.length === 1 ? "" : "s"} to ${config.output}/...`);
+
   if (!fs.existsSync(outputDir)) {
     fs.mkdirSync(outputDir, { recursive: true });
   }
@@ -170,14 +191,14 @@ async function runOnce(rootDir: string, config: Config): Promise<void> {
     const filePath = path.join(outputDir, "index.json");
     fs.writeFileSync(filePath, JSON.stringify(bundle, null, 2), "utf-8");
     log(`  Wrote ${filePath}`);
-    console.log(`\nGenerated index.json (${allResults.length} entries) in ${config.output}/`);
+    spinner.succeed(`Generated index.json (${allResults.length} entries) in ${config.output}/`);
   } else {
     for (const result of allResults) {
       const filePath = path.join(outputDir, result.filename);
       fs.writeFileSync(filePath, result.content, "utf-8");
       log(`  Wrote ${filePath}`);
     }
-    console.log(`\nGenerated ${allResults.length} file(s) in ${config.output}/`);
+    spinner.succeed(`Generated ${allResults.length} file${allResults.length === 1 ? "" : "s"} in ${config.output}/`);
   }
 }
 
